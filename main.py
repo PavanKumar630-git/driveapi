@@ -55,16 +55,62 @@ def process_file(db, email, token, folderpath, cloudfolderpath, file_path):
         return {"file": file_path, "error": str(e), "status": "failed"}
 
 
+# @app.post("/upload/dropbox/folder")
+# def upload_folder_dropbox(
+#     email: str = Form(...),
+#     token: str = Form(...),
+#     folderpath: str = Form(...),         # Local path
+#     cloudfolderpath: str = Form(...),    # Cloud destination folder
+#     batch_size: int = Form(DEFAULT_BATCH_SIZE),  # 👈 take batch size from payload
+#     db: Session = Depends(get_db),
+# ):
+#     uploaded = []
+
+#     # Ensure remote folder exists
+#     dropbox_service.ensure_folder_exists(token, cloudfolderpath)
+
+#     # Collect all files
+#     all_files = []
+#     for root, _, files in os.walk(folderpath):
+#         for f in files:
+#             all_files.append(os.path.join(root, f))
+
+#     # Process files in batches
+#     for i in range(0, len(all_files), batch_size):
+#         batch = all_files[i : i + batch_size]
+
+#         # Parallel upload within batch
+#         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+#             futures = [
+#                 executor.submit(process_file, db, email, token, folderpath, cloudfolderpath, f)
+#                 for f in batch
+#             ]
+
+#             for future in as_completed(futures):
+#                 uploaded.append(future.result())
+
+#     return {
+#         "total": len(uploaded),
+#         "batch_size": batch_size,
+#         "uploaded": uploaded,
+#     }
+
 @app.post("/upload/dropbox/folder")
 def upload_folder_dropbox(
     email: str = Form(...),
-    token: str = Form(...),
-    folderpath: str = Form(...),         # Local path
-    cloudfolderpath: str = Form(...),    # Cloud destination folder
-    batch_size: int = Form(DEFAULT_BATCH_SIZE),  # 👈 take batch size from payload
+    folderpath: str = Form(...),          # Local path
+    cloudfolderpath: str = Form(...),     # Cloud destination folder
+    batch_size: int = Form(DEFAULT_BATCH_SIZE),  # batch size
     db: Session = Depends(get_db),
 ):
     uploaded = []
+
+    # 🔹 Get token from DB (InputTableCloud)
+    cloud_info = crud.get_cloud_info(db, email, "dropbox")
+    if not cloud_info or not cloud_info.tokens:
+        return {"error": f"No Dropbox token found for {email}"}
+
+    token = cloud_info.tokens
 
     # Ensure remote folder exists
     dropbox_service.ensure_folder_exists(token, cloudfolderpath)
@@ -79,7 +125,6 @@ def upload_folder_dropbox(
     for i in range(0, len(all_files), batch_size):
         batch = all_files[i : i + batch_size]
 
-        # Parallel upload within batch
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = [
                 executor.submit(process_file, db, email, token, folderpath, cloudfolderpath, f)
@@ -94,48 +139,6 @@ def upload_folder_dropbox(
         "batch_size": batch_size,
         "uploaded": uploaded,
     }
-# @app.post("/upload/dropbox/folder")
-# def upload_folder_dropbox(
-#     email: str = Form(...),
-#     token: str = Form(...),
-#     folderpath: str = Form(...),         # Local path
-#     cloudfolderpath: str = Form(...),    # Cloud destination folder
-#     db: Session = Depends(get_db),
-# ):
-#     uploaded = []
-
-#     # Ensure remote folder exists
-#     dropbox_service.ensure_folder_exists(token, cloudfolderpath)
-
-#     for root, _, files in os.walk(folderpath):
-#         for f in files:
-#             file_path = os.path.join(root, f)
-#             with open(file_path, "rb") as fp:
-#                 content = fp.read()
-
-#             # keep relative path
-#             rel_path = os.path.relpath(file_path, folderpath)
-#             cloud_path = f"{cloudfolderpath}/{rel_path}".replace("\\", "/")
-
-#             # upload
-#             uploaded_path = dropbox_service.upload_file_dropbox(token, content, cloud_path)
-            
-
-#             # log in db
-#             crud.log_uploaded_file(
-#                 db,
-#                 emailid=email,
-#                 cloud="dropbox",
-#                 filelocalpath=file_path,
-#                 cloudpath=uploaded_path,
-#                 filesize=len(content),
-#                 filetype="application/octet-stream",
-#                 status="success",
-#             )
-
-#             uploaded.append({"file": rel_path, "cloud_path": uploaded_path})
-
-#     return {"status": "uploaded", "count": len(uploaded), "files": uploaded}
 
 # ----------------- Dropbox -----------------
 @app.post("/upload/dropbox")
