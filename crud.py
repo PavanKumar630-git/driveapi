@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import UploadedDataTable, OutputFolderStructureTable
+from models import UploadedDataTable, OutputFolderStructureTable, InputTableCloud
 from datetime import datetime
 
 
@@ -39,3 +39,9 @@ def save_folder_structure(db: Session, emailid: str, cloud: str, items: list):
         )
         db.add(entry)
     db.commit()
+
+def get_cloud_info(db, emailid: str, cloud: str):
+    return db.query(InputTableCloud).filter(
+        InputTableCloud.emailid == emailid,
+        InputTableCloud.cloud == cloud
+    ).first()
